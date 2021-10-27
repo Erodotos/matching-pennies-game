@@ -27,16 +27,120 @@
 \rule{\linewidth}{0.5mm}
 \end{center}
 
-\section*{Smart Contract High-Level Description}
-\begin{itemize}
-        \item Simple description of the game
-        \item Who pays for the reward of the winner?
-        \item How is the reward paid to the winner?
-        \item Anticheat measures taken
-        \item What data type/structure did you use for the pick options and why?
-\end{itemize}
+\section*{Game High-Level Description}
+Matching pennies is a zero-sum game used in game theory.
+In particular, we have two players who want to bet against each other.
+In this game, each player will randomly pick a number 0 or 1 
+(we can think of it as true/false or head/tails). 
+If both players place the same bet, \emph{playerA} will get the reward of 1 ETH; 
+else, if both players choose different numbers \emph{playerB} wis. 
+This is a zero-sum game since the reward of the winner is the loss of
+the other player. The diagram below illustrates the aforementioned winner/loser
+scheme we have described. \\
+
+\begin{table}[htpb]
+    \begin{center}
+        \begin{tabular}{lccc}
+                                                              & \multicolumn{1}{l}{}   & \multicolumn{2}{c}{Player A Bet}                                                \\
+                                                              &                        & 0                                      & 1                                      \\ \cline{3-4} 
+            \multicolumn{1}{c}{\multirow{2}{*}{Player B Bet}} & \multicolumn{1}{c|}{0} & \multicolumn{1}{c|}{\textit{Player A}} & \multicolumn{1}{c|}{\textit{Player B}} \\ \cline{3-4} 
+            \multicolumn{1}{c}{}                              & \multicolumn{1}{c|}{1} & \multicolumn{1}{c|}{\textit{Player B}} & \multicolumn{1}{c|}{\textit{Player A}} \\ \cline{3-4} 
+        \end{tabular}
+    \end{center}
+\end{table}
+
+At any moment, only two players can participate in this game.
+They have a specific time limit to complete their round so other
+players can play the game later. Each player who wants to join the
+game has to bet 1 ETH and pay extra transaction gas fees. \\
+
+It is essential to mention that when a player wants to play, he has to
+do this in a two-step process. Firstly, he has to obscure his bet.
+This is because any transaction data are visible on public-permissionless blockchains.
+For this reason, we use a hash function to locally hash a player's bet
+concatenated with a random salt that the player chooses.
+
+\begin{center}
+    \[Obscured \; Bet = H( bet || salt ), \;\;\; where \; H: Keccak256Hash\]
+\end{center}
+
+Using this technique, when \emph{playerA} submits his bet on the Smart Contract,
+nobody can view his real bet value and thus not cheat on him. Afterward,
+\emph{playerB} has to place his bet in the same manner. \\
+
+When this phase completes, players' bets are locked, and they can not make
+any changes. Subsequently, we move to the second phase of the game, where
+each player has to provide his real bet and salt to validate their initial bet inputs. \\
+
+We have to mention that whenever a player interacts with the Smart Contract,
+an event is emitted to notify the other player to progress. Each player has
+10 minutes to respond, else the one who played last can request a refund and
+cancel the game. The player who did not responded in time, loses his ETH, which are kept
+by the contract. \\
+
+Finally, any of the two players can call the Smart Contract evaluate function to calculate the winner.
+The winner can immediately withdraw his reward from the Smart Contract and reset the game settings
+allowing another pair of players to compete. \\
+
+The above process describes the core concept behind the implementation of the game.
+Furthermore, during the realization of the program, several programming techniques have
+been used to facilitate the flawless and safe execution of the Smart Contract. We discuss
+such good programming practices and considerations in the "Potential Hazards and Vulnerabilities" section.\\
+
+There follows a detailed description of each Smart Contract Variables, Functions, and Events: \\
+
+\textbf{\underline{Variables}} \\
+
+\emph{\_playDeadline:} \\
+
+\emph{\_playedLast:} \\
+
+\emph{\_adr\_playerA:} \\
+
+\emph{\_adr\_playerB:} \\
+
+\emph{\_bets:} \\
+
+\emph{Bet:} \\
+
+\emph{\_locked:} \\
+
+\emph{\_playersJoined:} \\
+
+\emph{\_winner:} \\
+
+\emph{giveHiddenBet():} \\
+
+\textbf{\underline{Events}} \\
+
+\emph{event Play:} \\
+
+\emph{event Winner:} \\
+
+\emph{event NewGame:} \\
+
+\textbf{\underline{Functions}} \\
+
+\emph{giveHiddenBet():} \\
+
+\emph{giveRealBet():} \\
+
+\emph{eveluateWinner():} \\
+
+\emph{requestRefund():} \\
+
+\emph{withdraw():} \\
+
+\emph{gameReset:} \\
 
 \section*{Gas Costs Evaluation}
+This section measures and evaluates the gas cost we expect to have when deploying and
+interacting with the Smart Contract. \\
+
+Gas costs appear in the following table, and they are unquestionably high.
+The Smart Contract owner has to pay 1,801,345 gas units to deploy the code, which is
+approximately \$995 (price on 26/10/21). This is definitely a high amount of gas which makes the
+Smart Contract not so gas efficient. \\
 
 \begin{table}[htpb]
     \begin{center}
@@ -51,19 +155,43 @@
         \multicolumn{1}{|c|}{giveRealBet()}                  & \multicolumn{1}{c|}{81,007}                     & \multicolumn{1}{c|}{83,807}                     \\ \hline
         \multicolumn{1}{|c|}{evaluate()}                     & \multicolumn{2}{c|}{40,423}                                                                       \\ \hline
         \multicolumn{1}{|c|}{withdraw()}                     & \multicolumn{2}{c|}{43,717}                                                                       \\ \hline
+        \multicolumn{1}{|c|}{requestRefund()}                & \multicolumn{2}{c|}{54,648}                                                                       \\ \hline
         \end{tabular}
     \end{center}
 \end{table}
 
+In regards to the players interacting with the Smart Contract, the fees are much lower.
+Namely, during the initial phase of submitting a hidden bet, \emph{playerA} has to pay 135,643
+and \emph{playerB} 84,620 gas units, translating to approximately \$61 and \$44, respectively.
+We can notice a considerable difference between the fees paying each player, making this a bit unfair. \\
 
+For the next step, both players need to call the giveRealBet() function, which will cost
+them 81,007(\$42) and  83807 (\$43) accordingly. Finally, the evaluation, withdrawal, and
+refund functions will cost 40,423(\$20), 43,717(\$20), 54,648(\$28) gas units.  \\
+
+Commenting on the above findings, it is apparent that \emph{playerA} has a disadvantage against \emph{playerB}
+in terms of gas fairness. In total, \emph{playerA} has to pay 216,650 gas units while \emph{playerB} 168,427
+gas units, occurring a difference of 48,223. To mitigate this imbalance, we propose that \emph{playerB}
+call the evaluateWinner() function narrowing the gap to 7800 gas units. Regarding refund
+requests and withdrawals, it is more than fair that the transaction invoker pays the proportional
+fee for himself.
 
 \begin{itemize}
-        \item Cost of deploying and interacting with contract
-        \item Comment on gas fairness
-        \item Techniques to make smart contract more fair and cost efficient.
+        \item Techniques to make Smart Contract more fair and cost efficient.
 \end{itemize}
 
 \section*{Potential Hazards and Vulnerablities}
+
+Developing a Smart Contract for the Ethereum Network can always be challenging.
+This is because, on a public-permissionless blockchain, everything is observable by everyone.
+This fact makes it difficult when it comes to securing users' data. Besides that, a developer
+has to be alert to write code that is attack-resistant. Ethereum Blockchain and specifically
+Smart Contracts expose a broad spectrum of vulnerabilities, enabling an adversarial entity to
+exploit them for its interest. \\
+
+When developing the Matching Pennies game, we took into consideration possible attacks.
+The following list presents vulnerabilities and mechanisms to moderate them.
+
 \begin{itemize}
         \item List of security mechanisms used to mitigate such hazards
 \end{itemize}
