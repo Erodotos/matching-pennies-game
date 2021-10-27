@@ -111,7 +111,7 @@ contract Game {
             "You are not allowed  to request a refund yet!"
         );
 
-        gameReset();
+        gameReset(1 ether);
     }
 
     /// @notice Allows the winner to withdraw his reward
@@ -119,12 +119,12 @@ contract Game {
         // Checks
         require(msg.sender == _winner, "You are not the winner!");
 
-        gameReset();
+        gameReset(2 ether);
     }
 
     /// @notice Send money to the winner or the 
     /// refund requestor and reset game variables for a new round
-    function gameReset() internal {
+    function gameReset(uint8 _value) internal {
         _locked = 0;
         _winner = address(0);
         _playersJoined = 0;
@@ -135,7 +135,7 @@ contract Game {
         _playDeadline = 0;
 
         // Reward/Refund transfer
-        (bool success, ) = msg.sender.call{value: 2 ether}("");
+        (bool success, ) = msg.sender.call{value: _value}("");
         require(success, "Error: Withdraw unsuccessful");
 
         // Emmit event

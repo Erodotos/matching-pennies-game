@@ -91,47 +91,64 @@ There follows a detailed description of each Smart Contract Variables, Functions
 
 \textbf{\underline{Variables}} \\
 
-\emph{\_playDeadline:} \\
+\emph{\_playDeadline:} This is a public uint256 that stores the last time a player interacted with the game.\\
 
-\emph{\_playedLast:} \\
+\emph{\_playedLast:} This is a public uint256 that stores the address of the last player.\\
 
-\emph{\_adr\_playerA:} \\
+\emph{\_adr\_playerA:} This is a public uint256 that stores the address of playerA\\
 
-\emph{\_adr\_playerB:} \\
+\emph{\_adr\_playerB:} This is a public uint256 that stores the address of playerB \\
 
-\emph{\_bets:} \\
+\emph{\_bets:} This is a public mapping which stores a players address and its corresponding Bet. The bet is a struct as shown below\\
 
-\emph{Bet:} \\
+\emph{Bet:} This is a struct consist of a string which is the real bed, a bytes32 which represents the hidden bet
+, and a boolean variable that indicates if the bet is valid.\\
 
-\emph{\_locked:} \\
+\emph{\_locked:} This is a public uint8 that takes values 0,1. When its value
+is 1 the Smart Contract is considered locked, and no one else can place new bets.\\
 
-\emph{\_playersJoined:} \\
+\emph{\_playersJoined:} This is a public uint8 that stores how many players joined the game on a round. It takes
+values 0,1,2.\\
 
-\emph{\_winner:} \\
+\emph{\_winner:} This variable stores the address of the winner.\\
 
-\emph{giveHiddenBet():} \\
 
 \textbf{\underline{Events}} \\
 
-\emph{event Play:} \\
+\emph{event Play:} Whenever a player interacts with the Smart Contract to place his bet, a new event is emitted
+to notify the other player to place his bet. This event displays informatin such as the address of the player
+who interacted last and his index.\\
 
-\emph{event Winner:} \\
+\emph{event Winner:} Whenever a player wins the game, this event is emitted, so the winning entity knows. This event displays the winner address.\\
 
-\emph{event NewGame:} \\
+\emph{event NewGame:} Whenever the Smart Contract is available and can host a new round this event is emitted.\\
+
 
 \textbf{\underline{Functions}} \\
 
-\emph{giveHiddenBet():} \\
+\emph{giveHiddenBet():} This is a payable function. The player provides a bytes32 value representing its bet.
+This is an obscured representation of it since we want it to be safe so playerB won't cheat.
+The function requires that it is not locked, that the player has sent 1 ETH, and that the player
+has not already placed another bet. After these checks are complete, the Smart Contract variables
+are updated, and the player's bet is final. Eventually, this function emits an event to notify the other player to progress.\\
 
-\emph{giveRealBet():} \\
+\emph{giveRealBet():} This external function can be called after both players have placed their hidden bet.
+It receives as input the real bet and salt of each player and validates and updates their hidden bet.
+Eventually, this function emits an event to notify the other player to progress.\\
 
-\emph{eveluateWinner():} \\
+\emph{eveluateWinner():} This external function is called to determine which player won the game.
+The constraint for this function is that both users' bets have to be validated.
+Eventually, this function emits an event to notify players about the game outcome.\\
 
-\emph{requestRefund():} \\
+\emph{requestRefund():} This is an external function and can be called by the player who played last, and only if 10 minutes
+have passed from his previous interaction. Then the gameReset function is called, and one ether is returned to him.\\
 
-\emph{withdraw():} \\
+\emph{withdraw():} This is an external function that can be called only by the game-winner. If this requirement is 
+satisfied the gameReset() function is called, and two ether are returned to the winner.\\
 
-\emph{gameReset:} \\
+\emph{gameReset():} This is an internal function which can be called by requestRefund() and withdraw() functions.
+Its purpose is to reset the Smart Contract variables and prepare the game to host a new pair of players. Finally, this 
+function delivers the requested amount of ether to the proper recipient.\\
 
 \section*{Gas Costs Evaluation}
 This section measures and evaluates the gas cost we expect to have when deploying and
@@ -176,9 +193,10 @@ call the evaluateWinner() function narrowing the gap to 7800 gas units. Regardin
 requests and withdrawals, it is more than fair that the transaction invoker pays the proportional
 fee for himself.
 
-\begin{itemize}
-        \item Techniques to make Smart Contract more fair and cost efficient.
-\end{itemize}
+Potentially, we could argue that the Smart Contract can be improved in terms of gas efficiency.
+Such improvements would be to use a different structure to store the players' bets. Using a string
+in the Bet struct is not ideal, but the validation process could not be achieved using bytes32 data type.
+There was an issue when it came to concatenating the real bet and salt.
 
 \section*{Potential Hazards and Vulnerablities}
 
@@ -190,10 +208,80 @@ Smart Contracts expose a broad spectrum of vulnerabilities, enabling an adversar
 exploit them for its interest. \\
 
 When developing the Matching Pennies game, we took into consideration possible attacks.
-The following list presents vulnerabilities and mechanisms to moderate them.
+The following list presents vulnerabilities and mechanisms to moderate them. \\
+
+\textbf{\emph{DoS(Denial of Service) - Griefing: }}An attacker attempts to make a Smart Contract get stuck
+when executed. In the case of the Matching Pennies game, a player might grieve and stop
+playing to halt the Smart Contract or make his opponent lose money. This is not wanted
+since the other player's ETH will get stuck, and no one else will be able to play the game. \\
+
+\textbf{\emph{Mitigation: }}To counter this type of attack, we implemented a time limit mechanism.
+When a player interacts with the Smart Contract, a timer is initiated. The other
+player has only 10 minutes to play his move. If the time limit expires, the last
+player can request a refund and cancel the game. The funds of the misbehaved player
+will be kept as punishment. If a single player tries to halt the program
+(i.e., only one player joins the game), the Smart Contract owner can join,
+to force the first player to play. If the first player refuses to play, he will
+lose his money since the contract owner can request a refund, which will reset the game.
+Using this technique, the Smart Contract can never halt. \\
+
+\textbf{\emph{DoS(Denial of Service) - Pull Vs. Push: }}When sending the reward to the winner,
+there are several ways to do it. If we decide to send the reward to the player, he
+might have a malicious fallback function that will halt the transaction on a loop
+and make the Smart Contract run out of gas. \\
+
+\textbf{\emph{Mitigation: }}It is a good practice to use a pull mechanism where each
+player has to initiate a withdrawal. As a result, each external transaction is isolated
+and reduces any problem with gas limits since the Smart Contract balance will not be affected.
+The user who initiates the transaction will have to pay for it. \\
+
+\textbf{\emph{Re-Entrancy: }}An attacker might try to take advantage of the Smart Contract withdraw
+function by executing a reentrancy attack. In more detail, when he runs a withdrawal,
+he can lead his transaction to a malicious fallback function on another Smart Contract
+that can recursively call again the withdraw function, trying to get more ETH. \\
+
+\textbf{\emph{Mitigation: }}In order to avoid such unpleasant attacks, we execute the code of the
+Smart Contract in a particular way. When there is a withdrawal invocation, we check
+some constraints to ensure that the transaction sender can withdraw ETH. After that,
+we will make any changes to the state of the Smart Contract and eventually make the call
+that sends the requested ETH to the recipient. It is important to make the ETH transfer
+after changing the Smart Contract state. If a reentrancy attack occurs on the next transaction,
+it will be stopped because checks will evaluate the transaction according to the previously updated state. \\
+
+\textbf{\emph{Front-Running: }}This attack happens on the Miner level. An attacker might clone your transaction
+and put a much higher gas limit on it. This results in the inclusion of his transaction to the
+next block instead of yours. This is inconvenient since another player might steal your spot in the game. \\
+
+\textbf{\emph{Mitigation: }}There is no straightforward solution since the problem lies at the transaction mining level.
+For the Matching Pennies game, front-running will not have a significant effect, except that a player
+might steal the position of another one. The disfavored player will have the opportunity to play in another moment. \\
+
+\textbf{\emph{Overflow/Underflow: }}Matching Pennies game does not face this problem since it does not receive any integer
+value from the transaction sender. \\
+
+\textbf{\emph{Randomness Source Exposure: }}Matching Pennies game does not face this problem since it does not use any
+random value during the code execution. \\
+
+\textbf{\emph{Delegation: }}Matching Pennies game does not face this problem since it does not use code
+from other Smart Contracts or Libraries. \\
+
+\textbf{\emph{\underline{Other good practices:}}} \\ 
 
 \begin{itemize}
-        \item List of security mechanisms used to mitigate such hazards
+    \item Use call() instead of transfer() or send().
+    Using call() might be insecure, but transfer() and send() can forward only 2300 gas. In the future 
+    gas costs might change, and 2300 gas might not be enough. Consequently, we must apply some
+    checks when using the call() function to secure our transactions. View the example below. \\
+    \begin{lstlisting}
+        (bool success, ) = msg.sender.call.value(amount)(""); 
+        require(success, "Transfer failed.");
+    \end{lstlisting}
+    \item If you need to have a callback function, keep it simple.
+    \item Any public-permissionless blockchain reveals transaction details to 
+    the ledger. Due to this fact, in data-sensitive applications such as the
+    Matching Pennies game, we need to hide users' data. We can do this by following a
+    two-phase process: committing a value obscured by hashing the bet and some salt
+    and then exposing the real value.
 \end{itemize}
 
 \section*{Security vs Performance}
@@ -209,6 +297,47 @@ The following list presents vulnerabilities and mechanisms to moderate them.
 \end{itemize}
 
 \section*{Smart Contract Execution History}
+
+Owner Address: 0x79BE6e946368520419BF4A20aC45b28fd3a5b2bA \\
+Player A Address: 0xE083f2644739ef27EC126e42288253F0b9AdFB85 \\
+Player B Address: 0xd29Fd58d75aE640415D23166802EA3bd66Ddfd04 \\
+
+Player A Balance: 2 ETH \\
+Player B Balance: 2 ETH \\
+
+\begin{itemize}
+    \item \textbf{Phase 0 - Smart Contract deployment} \\
+    
+    Deployment tx: 0x66014298bc638b7a72b29ef643c15960910470bed2918bcceaeec0bfdeda76ae \\
+    Contract Address: 0xF87a42464eEf144fF0C81cE8d5E927548CF4695D \\
+
+    \item \textbf{Phase 1 - Submit hidden value} \\
+    
+    Player A input: 0x3eb0fa86b29ff88ffdd4458cd1f554dd6ad43237a86e38c862ab6c440a387964 \\
+    Player A tx: 0x742e2b4bd030a2e1130fae0f5f9ff413407fd0502af2a1106dec3d9461453e15 \\
+
+    Player B input: 0xf7f905159c4867bf40ccc7667b940bf77402f6daddc3055b3b2256cb0a291365 \\
+    Player B tx: 0xfe3bdff40b02b116befa96647f6b31bf8a80c212aeeeda5b7b20774c6994b981 \\
+
+    \item \textbf{Phase 2 - Submit real values} \\
+
+    Player A input: 0, 123 \\
+    Player A tx: 0xb497dd616183eeccc8eba62c2989e5d4661e4af39b28bf9b43b63b2114fc1742 \\
+
+    Player B input: 0, 234 \\
+    Player B tx: 0xba1edb21440455e86c75a59f74205cd6874c7c993f2a866e3ce198b8232ceb9e \\
+
+    \item \textbf{Phase 3 - Calculating Winner} \\
+    
+    Evaluation tx: 0x623271aba3304cb1a4983979ae5521a3edb0989dba845982e9ea38d36be9bdfa\\
+
+    \item \textbf{Phase 4 - Winner withdrawal} \\
+    
+    Withdrawal tx: 0x91686c19055f98eb6b2450e0804b537dc6f62ce3b2ad843fcf47b71a0f4cdf32 \\
+\end{itemize}
+
+Player A Balance: 2.9997 ETH \\
+Player B Balance: 0.9998 ETH \\
 
 \section*{Implementation Code}
 \begin{lstlisting}
