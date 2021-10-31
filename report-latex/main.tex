@@ -3,6 +3,7 @@
 \usepackage{graphicx}
 \usepackage[left=2cm,right=2cm,top=2cm,bottom=2cm]{geometry}
 \usepackage{listings}
+\usepackage{lstlang-go}
 \input{solidity-highlighting.tex}
 \usepackage{multirow}
 
@@ -28,15 +29,7 @@
 \end{center}
 
 \section*{Game High-Level Description}
-Matching pennies is a zero-sum game used in game theory.
-In particular, we have two players who want to bet against each other.
-In this game, each player will randomly pick a number 0 or 1 
-(we can think of it as true/false or head/tails). 
-If both players place the same bet, \emph{playerA} will get the reward of 1 ETH; 
-else, if both players choose different numbers \emph{playerB} wis. 
-This is a zero-sum game since the reward of the winner is the loss of
-the other player. The diagram below illustrates the aforementioned winner/loser
-scheme we have described. \\
+Matching pennies is a zero-sum game used in game theory. For this assignment, we implement this game on a Smart Contract using \emph{Solidity}. In our version of the game, we have two players who want to bet against each other. Each player will randomly pick a number 0 or 1 (we can think of it as true/false or head/tails). If both players place the same bet, playerA will get the reward of 1 ETH; else, if both players choose different numbers playerB wis. This is a zero-sum game since the reward of the winner is the loss of the other player. The diagram below illustrates the aforementioned winner/loser scheme we have described.
 
 \begin{table}[htpb]
     \begin{center}
@@ -49,45 +42,25 @@ scheme we have described. \\
     \end{center}
 \end{table}
 
-At any moment, only two players can participate in this game.
-They have a specific time limit to complete their round so other
-players can play the game later. Each player who wants to join the
-game has to bet 1 ETH and pay extra transaction gas fees. \\
+Only two players can participate in the game, and they have a specific time limit to complete their match so other players can play the game later. Each player who wants to join the game has to bet 1 ETH and pay extra transaction gas fees.\\
 
-It is essential to mention that when a player wants to play, he has to
-do this in a two-step process. Firstly, he has to obscure his bet.
-This is because any transaction data are visible on public-permissionless blockchains.
-For this reason, we use a hash function to locally hash a player's bet
-concatenated with a random salt that the player chooses.
+It is essential to mention that when a player wants to play, there is a two-step process. Firstly, he has to obscure his bet. He needs to do this because any transaction data are visible on public- permissionless blockchains. To hide a bet, we use a program to hash its value using a random slat. This program can be found at the end of this report.
 
 \begin{center}
     \[Obscured \; Bet = H( bet || salt ), \;\;\; where \; H: Keccak256Hash\]
 \end{center}
 
-Using this technique, when \emph{playerA} submits his bet on the Smart Contract,
-nobody can view his real bet value and thus not cheat on him. Afterward,
-\emph{playerB} has to place his bet in the same manner. \\
+Using this technique, when playerA submits his bet on the Smart Contract, nobody can view his real prediction and thus not cheat on him. Afterward, playerB has to place his bet in the same manner.\\
 
-When this phase completes, players' bets are locked, and they can not make
-any changes. Subsequently, we move to the second phase of the game, where
-each player has to provide his real bet and salt to validate their initial bet inputs. \\
+When this phase completes, players’ bets are locked, and they can not make any changes. Subsequently, we move to the second phase of the game, where each player has to provide his real bet and salt to validate their initial inputs.\\
 
-We have to mention that whenever a player interacts with the Smart Contract,
-an event is emitted to notify the other player to progress. Each player has
-10 minutes to respond, else the one who played last can request a refund and
-cancel the game. The player who did not responded in time, loses his ETH, which are kept
-by the contract. \\
+In addition, whenever a player interacts with the Smart Contract, an event is emitted to notify his opponent to progress. Each player has 10 minutes to react, else the one who played last can request a refund and cancel the game. The player who did not respond in time loses his ETH, which are kept by the contract.\\
 
 Finally, any of the two players can call the Smart Contract evaluate function to calculate the winner.
 The winner can immediately withdraw his reward from the Smart Contract and reset the game settings
 allowing another pair of players to compete. \\
 
-The above process describes the core concept behind the implementation of the game.
-Furthermore, during the realization of the program, several programming techniques have
-been used to facilitate the flawless and safe execution of the Smart Contract. We discuss
-such good programming practices and considerations in the "Potential Hazards and Vulnerabilities" section.\\
-
-There follows a detailed description of each Smart Contract Variables, Functions, and Events: \\
+There follows a detailed description of our Smart Contract Variables, Functions, and Events: \\
 
 \textbf{\underline{Variables}} \\
 
@@ -116,7 +89,7 @@ values 0,1,2.\\
 \textbf{\underline{Events}} \\
 
 \emph{event Play:} Whenever a player interacts with the Smart Contract to place his bet, a new event is emitted
-to notify the other player to place his bet. This event displays informatin such as the address of the player
+to notify the other player to place his bet. This event displays information such as the address of the player
 who interacted last and his index.\\
 
 \emph{event Winner:} Whenever a player wins the game, this event is emitted, so the winning entity knows. This event displays the winner address.\\
@@ -126,29 +99,29 @@ who interacted last and his index.\\
 
 \textbf{\underline{Functions}} \\
 
-\emph{giveHiddenBet():} This is a payable function. The player provides a bytes32 value representing its bet.
-This is an obscured representation of it since we want it to be safe so playerB won't cheat.
-The function requires that it is not locked, that the player has sent 1 ETH, and that the player
-has not already placed another bet. After these checks are complete, the Smart Contract variables
-are updated, and the player's bet is final. Eventually, this function emits an event to notify the other player to progress.\\
+\emph{giveHiddenBet():} This is a payable function. The player provides a bytes32 value representing his bet. The function requirements are:
+\begin{enumerate}
+    \item A free spot to play.
+    \item The player to send 1 ETH.
+    \item The player has not already placed another bet.
+\end{enumerate}
+
+After these checks are complete, the Smart Contract variables are updated, and the player’s bet is final. Eventually, this function emits an event to notify the other player to progress.
 
 \emph{giveRealBet():} This external function can be called after both players have placed their hidden bet.
 It receives as input the real bet and salt of each player and validates and updates their hidden bet.
 Eventually, this function emits an event to notify the other player to progress.\\
 
 \emph{eveluateWinner():} This external function is called to determine which player won the game.
-The constraint for this function is that both users' bets have to be validated.
+The constraint for this function is that both users' bets are valid.
 Eventually, this function emits an event to notify players about the game outcome.\\
 
 \emph{requestRefund():} This is an external function and can be called by the player who played last, and only if 10 minutes
 have passed from his previous interaction. Then the gameReset function is called, and one ether is returned to him.\\
 
-\emph{withdraw():} This is an external function that can be called only by the game-winner. If this requirement is 
-satisfied the gameReset() function is called, and two ether are returned to the winner.\\
+\emph{withdraw():} This is an external function that can be called only by the game-winner. If this requirement is satisfied, the gameReset() function is called, and two ether are returned to the winner.\\
 
-\emph{gameReset():} This is an internal function which can be called by requestRefund() and withdraw() functions.
-Its purpose is to reset the Smart Contract variables and prepare the game to host a new pair of players. Finally, this 
-function delivers the requested amount of ether to the proper recipient.\\
+\emph{gameReset():} This is an internal function that can be called by requestRefund() and withdraw() functions. Its purpose is to reset the Smart Contract variables and prepare the game to host a new pair of players. Finally, this function delivers the requested amount of ether to the proper recipient.
 
 \section*{Gas Costs Evaluation}
 This section measures and evaluates the gas cost we expect to have when deploying and
@@ -165,7 +138,7 @@ Smart Contract not so gas efficient. \\
         \multicolumn{3}{c}{\textbf{Gas Costs}}                                                                                                                   \\
         \multicolumn{1}{l}{}                                 & \multicolumn{1}{l}{}                            & \multicolumn{1}{l}{}                            \\ \hline
         \multicolumn{3}{|c|}{\textit{\textbf{Contract Owner Fees}}}                                                                                              \\ \hline
-        \multicolumn{1}{|c|}{Contract Deployment}            & \multicolumn{2}{c|}{1,798,945}                                                                    \\ \hline
+        \multicolumn{1}{|c|}{Contract Deployment}            & \multicolumn{2}{c|}{1,801,345}                                                                    \\ \hline
         \multicolumn{1}{l}{}                                 & \multicolumn{1}{l}{}                            & \multicolumn{1}{l}{}                            \\ \hline
         \multicolumn{1}{|c|}{\textit{\textbf{Players Fees}}} & \multicolumn{1}{c|}{\textit{\textbf{Player A}}} & \multicolumn{1}{c|}{\textit{\textbf{Player B}}} \\ \hline
         \multicolumn{1}{|c|}{giveHiddenBet()}                & \multicolumn{1}{c|}{135,643}                    & \multicolumn{1}{c|}{84,620}                     \\ \hline
@@ -186,7 +159,7 @@ For the next step, both players need to call the giveRealBet() function, which w
 them 81,007(\$42) and  83807 (\$43) accordingly. Finally, the evaluation, withdrawal, and
 refund functions will cost 40,423(\$20), 43,717(\$20), 54,648(\$28) gas units.  \\
 
-Commenting on the above findings, it is apparent that \emph{playerA} has a disadvantage against \emph{playerB}
+Reflecting on the above measurements, it is apparent that \emph{playerA} has a disadvantage against \emph{playerB}
 in terms of gas fairness. In total, \emph{playerA} has to pay 216,650 gas units while \emph{playerB} 168,427
 gas units, occurring a difference of 48,223. To mitigate this imbalance, we propose that \emph{playerB}
 call the evaluateWinner() function narrowing the gap to 7800 gas units. Regarding refund
@@ -196,57 +169,24 @@ fee for himself. \\
 Potentially, we could argue that the Smart Contract can be improved in terms of gas efficiency.
 Such improvements would be to use a different structure to store the players' bets. Using a string
 in the Bet struct is not ideal, but the validation process could not be achieved using bytes32 data type.
-There was an issue when it came to concatenating the real bet and salt.
+There was an issue when it came to concatenating the real bet and salt using the Remix environment.
 
 \section*{Potential Hazards and Vulnerablities}
 
-Developing a Smart Contract for the Ethereum Network can always be challenging.
-This is because, on a public-permissionless blockchain, everything is observable by everyone.
-This fact makes it difficult when it comes to securing users' data. Besides that, a developer
-has to be alert to write code that is attack-resistant. Ethereum Blockchain and specifically
-Smart Contracts expose a broad spectrum of vulnerabilities, enabling an adversarial entity to
-exploit them for its interest. \\
+Developing a Smart Contract can always be challenging. This is because, on a public-permissionless blockchains, everything is observable by everyone. This fact makes it difficult when it comes to securing users’ data. Besides that, a developer has to be alert to write code that is attack-resistant. Smart Contracts expose a broad spectrum of vulnerabilities, enabling an adversarial entity to exploit them for his interest.\\
 
 When developing the Matching Pennies game, we took into consideration possible attacks.
 The following list presents vulnerabilities and mechanisms to moderate them. \\
 
-\textbf{\emph{DoS(Denial of Service) - Griefing: }}An attacker attempts to make a Smart Contract get stuck
-when executed. In the case of the Matching Pennies game, a player might grieve and stop
-playing to halt the Smart Contract or make his opponent lose money. This is not wanted
-since the other player's ETH will get stuck, and no one else will be able to play the game. \\
+\textbf{\emph{DoS(Denial of Service) - Griefing: }}An attacker attempts to make a Smart Contract get stuck when executed. In the case of our implementation, a player might grieve and stop playing to halt the Smart Contract or make his opponent lose money. This is not wanted since the other player’s ETH will get stuck, and no one else will be able to play the game. \\
 
-\textbf{\emph{Mitigation: }}To counter this type of attack, we implemented a time limit mechanism.
-When a player interacts with the Smart Contract, a timer is initiated. The other
-player has only 10 minutes to play his move. If the time limit expires, the last
-player can request a refund and cancel the game. The funds of the misbehaved player
-will be kept as punishment. If a single player tries to halt the program
-(i.e., only one player joins the game), the Smart Contract owner can join,
-to force the first player to play. If the first player refuses to play, he will
-lose his money since the contract owner can request a refund, which will reset the game.
-Using this technique, the Smart Contract can never halt. \\
+\textbf{\emph{Mitigation: }}To counter this type of attack, we implemented a time limit mechanism. When a player interacts with the Smart Contract, a timer is initiated. The other player has only 10 minutes to play his move. If the time limit expires, the last player can request a refund and cancel the game. The funds of the lapsed player will be kept as punishment. If a single player tries to halt the program (i.e., only one player joins the game and his opponent refuse), the Smart Contract owner can join, to force the first player to play. If the first player denies playing, he will lose his money since the contract owner can request a refund, which will reset the game. Using this technique, the Smart Contract can never halt.\\
 
-\textbf{\emph{DoS(Denial of Service) - Pull Vs. Push: }}When sending the reward to the winner,
-there are several ways to do it. If we decide to send the reward to the player, he
-might have a malicious fallback function that will halt the transaction on a loop
-and make the Smart Contract run out of gas. \\
+\pagebreak
 
-\textbf{\emph{Mitigation: }}It is a good practice to use a pull mechanism where each
-player has to initiate a withdrawal. As a result, each external transaction is isolated
-and reduces any problem with gas limits since the Smart Contract balance will not be affected.
-The user who initiates the transaction will have to pay for it. \\
+\textbf{\emph{Re-Entrancy: }}An attacker might try to take advantage of the Smart Contract withdraw function by executing a re-entrancy attack. In more detail, when he invokes a withdrawal transaction, he can drive his transaction to a malicious fallback function on another Smart Contract that can recursively call again and again the withdraw function, trying to get more ETH.\\
 
-\textbf{\emph{Re-Entrancy: }}An attacker might try to take advantage of the Smart Contract withdraw
-function by executing a reentrancy attack. In more detail, when he runs a withdrawal,
-he can lead his transaction to a malicious fallback function on another Smart Contract
-that can recursively call again the withdraw function, trying to get more ETH. \\
-
-\textbf{\emph{Mitigation: }}In order to avoid such unpleasant attacks, we execute the code of the
-Smart Contract in a particular way. When there is a withdrawal invocation, we check
-some constraints to ensure that the transaction sender can withdraw ETH. After that,
-we will make any changes to the state of the Smart Contract and eventually make the call
-that sends the requested ETH to the recipient. It is important to make the ETH transfer
-after changing the Smart Contract state. If a reentrancy attack occurs on the next transaction,
-it will be stopped because checks will evaluate the transaction according to the previously updated state. \\
+\textbf{\emph{Mitigation: }}In order to avoid such unpleasant attacks, we execute the code of the Smart Contract in a particular way. When there is a withdrawal invocation, we check some constraints to ensure that the transaction sender is allowed to withdraw ETH. After that, we will pass any updates to the state of the Smart Contract and eventually make the call that sends the requested ETH to the recipient. It is important to make the ETH transfer after changing the Smart Contract state. If a reentrancy attack occurs on the next transaction, it will be stopped because function constraints will evaluate the transaction according to the updated state.\\
 
 \textbf{\emph{Front-Running: }}This attack happens on the Miner level. An attacker might clone your transaction
 and put a much higher gas limit on it. This results in the inclusion of his transaction to the
@@ -268,10 +208,10 @@ from other Smart Contracts or Libraries. \\
 \textbf{\emph{\underline{Other good practices:}}} \\ 
 
 \begin{itemize}
-    \item Use call() instead of transfer() or send().
-    Using call() might be insecure, but transfer() and send() can forward only 2300 gas. In the future 
-    gas costs might change, and 2300 gas might not be enough. Consequently, we must apply some
-    checks when using the call() function to secure our transactions. View the example below. \\
+    \item Use \emph{call()} instead of \emph{transfer()} or \emph{send()}.
+    Using \emph{call()}  might be insecure, but \emph{transfer()} and \emph{send()} can forward only 2300 gas. In the future 
+    gas costs might change, and 2300 gas might not be enough. As a result using \emph{call()} properly is the right approach.
+    Below we can see an example of using \emph{call()} function and handling its outcome correctly.\\
     \begin{lstlisting}
         (bool success, ) = msg.sender.call.value(amount)(""); 
         require(success, "Transfer failed.");
@@ -285,13 +225,17 @@ from other Smart Contracts or Libraries. \\
 \end{itemize}
 
 \section*{Security vs Performance}
-\begin{itemize}
-        \item security vs performance trade-offs
-\end{itemize}
+Developing a secure Smart Contract while providing a great user experience is a complex task. We can not always have both. For example, we prefer to have push over pull design when it comes to withdrawing ether. This is because we want to avoid out-of-gas exceptions and isolate each money transfer to its own transaction. The downside of this approach is that the users have to take more steps. \\
+
+Furthermore, the user needs to know how to cover any sensitive information before submitting a transaction to the blockchain. This implies that users have to be educated on blockchain systems. This is not always feasible. Also, trying to secure our code by having more constraints, we make our Smart Contract less gas efficient and expensive to use. \\
+
+Besides that, when it comes to writing secure code, the programming language used might negatively affect the final product. This is because pretty new languages such as \emph{Solidity} were designed having specific specs in mind. We can reinforce \emph{Solidity's} core functionality by using libraries such as \emph{OpenZeppelin}, but the solution will not always fit. \\
+
+In conclusion, we can argue that when it comes to Smart Contract development, we have to make some crucial decisions between security, performance, and usability. Being able to find the golden mean in this problem can be very difficult. \\
 
 \section*{Fellow Student Contract Analysis}
 
-In this section, you find the review of a Smart Contract a fellow student implemented. \\
+In this section, you can find the review of a Smart Contract, a fellow student implemented. \\
 
 \textbf{Vulnerabilities :} 
 
@@ -306,16 +250,16 @@ In this section, you find the review of a Smart Contract a fellow student implem
 
 \begin{enumerate}
     \item The Smart Contract developer took the decision to use \emph{trasnfer()} function instead
-    of \emph{call()}. From one point of view this implementation logical if we consider that \emph{trasnfer()}
-    was introduced after the DAO attack to mitigate Re-Entrancy attack. However, \emph{trasnfer()}
-    does not allow to forward more than 2300 gas. This is good only if the gas costs wont change. 
+    of \emph{call()}. From one point of view this implementation is logical if we consider that \emph{trasnfer()}
+    was introduced after the DAO attack to mitigate Re-Entrancy attacks. However, \emph{trasnfer()}
+    does not allow to forward more than 2300 gas.
     In the future, if gas costs change the Smart Contract might be problematic.
-    \item When someone trie to claim a reward or a refund there are some checks, then funds are
-    transfered and eventually the Smart Contract variables are updated. In the example below an 
+    \item When someone tries to claim a reward or a refund, funds are
+    transfered (lines 9 - 16 below) before the Smart Contract variables are updated (lines 18 - 22 below). In the example below an 
     adversarial player1 might try to call \emph{gameReset()} in line 1 before any bet is revealed.
     So, he will validly pass the \emph{require} statements and procced to the line 11. From this
     point he will be able to perform a Re-Entrancy attack by calling again \emph{gameReset()}
-    and since the Smart Contract variables have not been updated yet, the attacker will pass any check
+    and since the Smart Contract variables have not been updated yet, the attacker will pass any constraint
     and be able to withdraw 2 ETH instead of 1 that is allowed. \\
 \begin{lstlisting}
 function resetGame () public { // allows people to play again, but doesn't deal with deposited ETH
@@ -343,13 +287,13 @@ function resetGame () public { // allows people to play again, but doesn't deal 
 }
 \end{lstlisting}
     \item The particular Smart Contract enables a player to play the game by himself. As a result, 
-    an adversarial entity that wants to stuck the code forever, can place a bet and never reveal it. (Grief)
+    an adversarial entity that wants to stuck the code forever, can place a bet with himself twice and leave.
     Consequently, the game will be locked and unavailable to other players.
     \item The \emph{claimReward()} function can be called by both players. As you can observe in 
-    the following figure, claim reward can be called by both players at any time. According to lines
+    the following figure, \emph{claimReward()} can be called by both players at any time. According to lines
     6 - 9 the actual winner is the one who calls the function first. As a result, the Smart Contract
     is vulnerable to Front-Running attacks. For instance, the loser of the game, might call the
-    \emph{claimReward()} function using more gas and steam the money from the winner. \\
+    \emph{claimReward()} function using more gas and steal the reward. \\
 
 \begin{lstlisting}
 function claimReward() external {
@@ -566,6 +510,28 @@ contract Game {
         emit NewGame("New game spots available");
     }
 }
+\end{lstlisting}
+
+\begin{lstlisting}[language=go]
+// Program to generate obscured bet
+
+package main
+import (
+	"flag"
+	"fmt"
+
+	"github.com/ethereum/go-ethereum/crypto"
+)
+func main() {
+	bet := flag.String("bet", "0", "Provide bet option, 0 or 1!")
+	salt := flag.String("salt", "random", "Provide a random salt")
+	flag.Parse()
+
+	input := []byte(*bet + *salt)
+	hash := crypto.Keccak256Hash(input)
+	fmt.Println(hash)
+}
+
 \end{lstlisting}
 
 \end{document}

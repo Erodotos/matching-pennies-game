@@ -1,3 +1,5 @@
+// Program to generate obscured bet
+
 package main
 
 import (
