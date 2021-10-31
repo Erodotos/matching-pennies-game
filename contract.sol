@@ -86,12 +86,12 @@ contract Game {
 
         if (
             keccak256(abi.encode(_bets[_adr_playerA]._realBet)) ==
-            keccak256(abi.encode(_bets[_adr_playerA]._realBet))
+            keccak256(abi.encode(_bets[_adr_playerB]._realBet))
         ) {
             _winner = _adr_playerA;
         } else if (
             keccak256(abi.encode(_bets[_adr_playerA]._realBet)) !=
-            keccak256(abi.encode(_bets[_adr_playerA]._realBet))
+            keccak256(abi.encode(_bets[_adr_playerB]._realBet))
         ) {
             _winner = _adr_playerB;
         }
@@ -124,7 +124,7 @@ contract Game {
 
     /// @notice Send money to the winner or the 
     /// refund requestor and reset game variables for a new round
-    function gameReset(uint8 _value) internal {
+    function gameReset(uint256 _value) internal {
         _locked = 0;
         _winner = address(0);
         _playersJoined = 0;

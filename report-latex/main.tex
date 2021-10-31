@@ -191,7 +191,7 @@ in terms of gas fairness. In total, \emph{playerA} has to pay 216,650 gas units 
 gas units, occurring a difference of 48,223. To mitigate this imbalance, we propose that \emph{playerB}
 call the evaluateWinner() function narrowing the gap to 7800 gas units. Regarding refund
 requests and withdrawals, it is more than fair that the transaction invoker pays the proportional
-fee for himself.
+fee for himself. \\
 
 Potentially, we could argue that the Smart Contract can be improved in terms of gas efficiency.
 Such improvements would be to use a different structure to store the players' bets. Using a string
@@ -290,11 +290,92 @@ from other Smart Contracts or Libraries. \\
 \end{itemize}
 
 \section*{Fellow Student Contract Analysis}
-\begin{itemize}
-        \item Vulnerabilities
-        \item How the player can exploit these vulnerabilities and win the game ?
-        \item Include code snippets
-\end{itemize}
+
+In this section, you find the review of a Smart Contract a fellow student implemented. \\
+
+\textbf{Vulnerabilities :} 
+
+\begin{enumerate}
+    \item Used \emph{trasnfer()} function to transfer rewards or refunds.
+    \item Update the Smart Contract state after transfering funds.
+    \item A player is allowed to play the game by himself.
+    \item The \emph{claimReward()} function can be called by both players.
+\end{enumerate}
+
+\textbf{Exploitation :} 
+
+\begin{enumerate}
+    \item The Smart Contract developer took the decision to use \emph{trasnfer()} function instead
+    of \emph{call()}. From one point of view this implementation logical if we consider that \emph{trasnfer()}
+    was introduced after the DAO attack to mitigate Re-Entrancy attack. However, \emph{trasnfer()}
+    does not allow to forward more than 2300 gas. This is good only if the gas costs wont change. 
+    In the future, if gas costs change the Smart Contract might be problematic.
+    \item When someone trie to claim a reward or a refund there are some checks, then funds are
+    transfered and eventually the Smart Contract variables are updated. In the example below an 
+    adversarial player1 might try to call \emph{gameReset()} in line 1 before any bet is revealed.
+    So, he will validly pass the \emph{require} statements and procced to the line 11. From this
+    point he will be able to perform a Re-Entrancy attack by calling again \emph{gameReset()}
+    and since the Smart Contract variables have not been updated yet, the attacker will pass any check
+    and be able to withdraw 2 ETH instead of 1 that is allowed. \\
+\begin{lstlisting}
+function resetGame () public { // allows people to play again, but doesn't deal with deposited ETH
+    require (msg.sender == player1 || msg.sender == player2, "You are not a player in this game" );
+
+    // if both players joined the game and one of them have revealed their choice, then the reset is not allowed
+    if (player1 != address(0) && player2 != address(0)) {
+        require ( !bets[player1].isValid && !bets[player2].isValid, "A player has already revealed choice, so you can no longer reset, game needs to be finished" );
+    }
+    // refund each player
+    if (player1 != address(0) ) {
+        require ( !bets[player1].isValid, "Player 1 has already revealed choice, so you can no longer reset, game needs to be finished" );
+        refundBet(payable(player1));
+    }
+    if ( player2 != address(0)) {
+        require ( !bets[player2].isValid, "Player 2 has already revealed choice, so you can no longer reset, game needs to be finished" );
+        refundBet(payable(player2));
+    }
+
+    choices[player1] = false; // these two lines allow each player to play again possibly
+    choices[player2] = false;
+
+    player1 = address(0); // allows another two players to play
+    player2 = address(0);
+}
+\end{lstlisting}
+    \item The particular Smart Contract enables a player to play the game by himself. As a result, 
+    an adversarial entity that wants to stuck the code forever, can place a bet and never reveal it. (Grief)
+    Consequently, the game will be locked and unavailable to other players.
+    \item The \emph{claimReward()} function can be called by both players. As you can observe in 
+    the following figure, claim reward can be called by both players at any time. According to lines
+    6 - 9 the actual winner is the one who calls the function first. As a result, the Smart Contract
+    is vulnerable to Front-Running attacks. For instance, the loser of the game, might call the
+    \emph{claimReward()} function using more gas and steam the money from the winner. \\
+
+\begin{lstlisting}
+function claimReward() external {
+    require (msg.sender == player1 || msg.sender == player2, "You are not a player in this game" );
+    require ( bets[player1].isValid, "Player 1 did not reveal a valid bet" );
+    require ( bets[player2].isValid, "Player 2 did not reveal a valid bet" );
+
+    if (choices[player1] == choices[player2]) {
+        winner = payable(msg.sender);
+        transferReward(); // calls on a separate function to transfer the 2 Eth
+    }
+    else {
+        winner = payable(bets[msg.sender].opponent);
+        transferReward();
+    }
+
+    // reset the game for the next two players
+
+    choices[player1] = false;
+    choices[player2] = false;
+
+    player1 = address(0);
+    player2 = address(0);
+}
+\end{lstlisting}
+\end{enumerate}
 
 \section*{Smart Contract Execution History}
 
@@ -429,12 +510,12 @@ contract Game {
 
         if (
             keccak256(abi.encode(_bets[_adr_playerA]._realBet)) ==
-            keccak256(abi.encode(_bets[_adr_playerA]._realBet))
+            keccak256(abi.encode(_bets[_adr_playerB]._realBet))
         ) {
             _winner = _adr_playerA;
         } else if (
             keccak256(abi.encode(_bets[_adr_playerA]._realBet)) !=
-            keccak256(abi.encode(_bets[_adr_playerA]._realBet))
+            keccak256(abi.encode(_bets[_adr_playerB]._realBet))
         ) {
             _winner = _adr_playerB;
         }
@@ -454,7 +535,7 @@ contract Game {
             "You are not allowed  to request a refund yet!"
         );
 
-        gameReset();
+        gameReset(1 ether);
     }
 
     /// @notice Allows the winner to withdraw his reward
@@ -462,12 +543,12 @@ contract Game {
         // Checks
         require(msg.sender == _winner, "You are not the winner!");
 
-        gameReset();
+        gameReset(2 ether);
     }
 
     /// @notice Send money to the winner or the 
     /// refund requestor and reset game variables for a new round
-    function gameReset() internal {
+    function gameReset(uint256 _value) internal {
         _locked = 0;
         _winner = address(0);
         _playersJoined = 0;
@@ -478,7 +559,7 @@ contract Game {
         _playDeadline = 0;
 
         // Reward/Refund transfer
-        (bool success, ) = msg.sender.call{value: 2 ether}("");
+        (bool success, ) = msg.sender.call{value: _value}("");
         require(success, "Error: Withdraw unsuccessful");
 
         // Emmit event
